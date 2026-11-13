@@ -165,7 +165,7 @@ const sb = supabase.createClient(
 );
 
 let ME=null,T=[],saving=false;const TABS={clerk:['weigh','truck','dash','mine'],cashier:['dash','admin','hist','stock','rep'],admin:['weigh','truck','dash','admin','hist','staff','audit','stock','rep','prod','set']},RL={clerk:'User — พนักงานชั่ง',cashier:'ผู้จ่ายเงิน/บัญชี',admin:'Admin'},can=t=>TABS[ME?.role]?.includes(t),FRONT=['weigh','truck','dash','mine'],TC={weigh:'#22c55e',truck:'#0ea5e9',dash:'#818cf8',mine:'#2dd4bf',admin:'#f59e0b',hist:'#a78bfa',audit:'#f472b6',stock:'#fb923c',rep:'#60a5fa',prod:'#a3e635',set:'#94a3b8',staff:'#e879f9'};
-let S={shop:'Mingkwan Smart Scale',recorder:'พนักงาน 1',pin:'1234',tares:'ตะกร้าเล็ก:1.2,ตะกร้าใหญ่:2.5,กระสอบ:0.3',unit:'kg'};
+let S={shop:'>ระบบรับซื้อของเก่า ERP',recorder:'พนักงาน 1',pin:'1234',tares:'ตะกร้าเล็ก:1.2,ตะกร้าใหญ่:2.5,กระสอบ:0.3',unit:'kg'};
 let P=[],B=[],cur={lines:[],photos:[]},adm=false,cash=false,stream=null,liveW=0,lastPend=-1;
 // ---------- auth / init ----------
 let want=null,PRE=null,pin='',pinFail=0,pinLock=0;
@@ -185,7 +185,7 @@ async function pinKey(k){if(Date.now()<pinLock)return $('perr').textContent='ผ
  pin='';pinDots();if(++pinFail>=5){pinFail=0;pinLock=Date.now()+30000;$('perr').textContent='ผิดหลายครั้ง รอ 30 วินาที'}else $('perr').textContent='รหัสไม่ถูกต้อง'}
 async function doLogin(){PRE=null;$('lerr').textContent='';const{error}=await sb.auth.signInWithPassword({email:$('em').value.trim(),password:$('pw').value});if(error)return $('lerr').textContent='เข้าสู่ระบบไม่สำเร็จ: '+error.message;boot()}
 async function logout(){await sb.auth.signOut();location.reload()}
-async function boot(){try{Object.assign(S,JSON.parse(localStorage.getItem('mk_set')||'{}'))}catch(e){}if(S.shop=='ร้านรับซื้อของเก่า')S.shop='Mingkwan Smart Scale';
+async function boot(){try{Object.assign(S,JSON.parse(localStorage.getItem('mk_set')||'{}'))}catch(e){}if(S.shop=='ร้านรับซื้อของเก่า')S.shop='>ระบบรับซื้อของเก่า ERP';
  const{data:{session}}=await sb.auth.getSession();if(!session)return showLogin();
  const{data:me,error}=await sb.from('profiles').select('*').eq('id',session.user.id).single();if(error)return showLogin();
  if(me.active===false){await sb.auth.signOut();return showLogin('บัญชีนี้ถูกปิดใช้งาน กรุณาติดต่อแอดมิน')}
@@ -229,7 +229,7 @@ function beep(kind){try{const a=beep.a||(beep.a=new(window.AudioContext||window.
  const seq=kind=='ok'?[[784,0],[988,300],[1319,600],[988,1100],[1319,1400],[1568,1700],[1319,2300],[1568,2600]]:[[880,0],[1175,450],[880,900],[1175,1350],[880,1800],[1175,2250],[880,2700],[1175,3150]];
  for(const[f,t]of seq)setTimeout(()=>{const o=a.createOscillator(),g=a.createGain();o.type='triangle';o.frequency.value=f;g.gain.setValueAtTime(.001,a.currentTime);g.gain.exponentialRampToValueAtTime(.35,a.currentTime+.03);g.gain.exponentialRampToValueAtTime(.001,a.currentTime+.4);o.connect(g);g.connect(a.destination);o.start();o.stop(a.currentTime+.42)},t)}catch(e){}}
 const NOTI=new Set();
-function notifyBill(r){if(NOTI.has('n'+r.id))return;NOTI.add('n'+r.id);const who=NAMES[r.recorder_id]||'พนักงาน',msg=`บิลใหม่ ${r.bill_no} · ${r.scale_no||'-'} · ${who} · ${r.seller_name} · ฿${f2(r.total)}`;beep('new');toast('🔔 '+msg,9000);document.title='🔔 บิลใหม่! Mingkwan';setTimeout(()=>document.title='Mingkwan Smart Scale',5000);
+function notifyBill(r){if(NOTI.has('n'+r.id))return;NOTI.add('n'+r.id);const who=NAMES[r.recorder_id]||'พนักงาน',msg=`บิลใหม่ ${r.bill_no} · ${r.scale_no||'-'} · ${who} · ${r.seller_name} · ฿${f2(r.total)}`;beep('new');toast('🔔 '+msg,9000);document.title='🔔 บิลใหม่! Mingkwan';setTimeout(()=>document.title='>ระบบรับซื้อของเก่า ERP',5000);
  try{if(window.Notification&&Notification.permission=='granted')new Notification('บิลใหม่รอจ่ายเงิน',{body:msg})}catch(e){}}
 // ---------- on-screen keyboard (touch-screen desktops; phones keep the system keyboard) ----------
 const KB={th:['_ๅ/-ภถุึคตจขช','ๆไำพะัีรนยบลฃ','ฟหกดเ้่าสวง','ผปแอิืทมใฝ'],TH:['%+๑๒๓๔ู฿๕๖๗๘๙','๐"ฎฑธํ๊ณฯญฐ,','ฤฆฏโฌ็๋ษศซ.','()ฉฮฺ์?ฒฬฦ'],en:['1234567890-','qwertyuiop','asdfghjkl','zxcvbnm,.'],EN:['!@#$%^&*()_','QWERTYUIOP','ASDFGHJKL','ZXCVBNM<>?']};
@@ -1916,7 +1916,7 @@ async function autoColorAll(){if(!await dlg('ใส่สีตามหมว�
     rows.push(...data);if(data.length<1000)break}
    out[t]=rows}
   bar(TB.length,TB.length);
-  return{app:'Mingkwan Smart Scale',build:BUILD,exported_at:new Date().toISOString(),counts:Object.fromEntries(Object.entries(out).map(([k,v])=>[k,v.length])),tables:out}}
+  return{app:'>ระบบรับซื้อของเก่า ERP',build:BUILD,exported_at:new Date().toISOString(),counts:Object.fromEntries(Object.entries(out).map(([k,v])=>[k,v.length])),tables:out}}
  const saveBlob=(name,blob)=>{const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},4000)};
  const cell=v=>{if(v==null)return '';if(typeof v=='object')v=JSON.stringify(v);return '"'+String(v).replace(/"/g,'""')+'"'},
   toCsv=r=>{if(!r.length)return '';const k=Object.keys(r[0]);return '\ufeff'+[k.join(','),...r.map(x=>k.map(c=>cell(x[c])).join(','))].join('\r\n')};
@@ -3061,9 +3061,9 @@ async function autoColorAll(){if(!await dlg('ใส่สีตามหมว�
  function fixSplash(n){try{if(n&&n.nodeType==1&&n.firstElementChild&&/^KHW$/.test(n.firstElementChild.textContent.trim())){n.firstElementChild.innerHTML=ICON(64)}}catch(e){}}
  [...document.body.children].forEach(fixSplash);
  new MutationObserver(m=>m.forEach(r=>r.addedNodes.forEach(fixSplash))).observe(document.body,{childList:true});
- // ชื่อแท็บ: โค้ดเดิมตั้งกลับเป็น "Mingkwan Smart Scale" หลังแจ้งเตือนบิลใหม่ -> เปลี่ยนเป็นชื่อระบบ
+ // ชื่อแท็บ: โค้ดเดิมตั้งกลับเป็น ">ระบบรับซื้อของเก่า ERP" หลังแจ้งเตือนบิลใหม่ -> เปลี่ยนเป็นชื่อระบบ
  const tt=document.querySelector('title');
- if(tt)new MutationObserver(()=>{const t=tt.textContent;if(/Mingkwan/.test(t)){const n=t.replace('Mingkwan Smart Scale',SYS_NAME).replace('Mingkwan','ERP');if(n!==t)tt.textContent=n}}).observe(tt,{childList:true,characterData:true,subtree:true});
+ if(tt)new MutationObserver(()=>{const t=tt.textContent;if(/Mingkwan/.test(t)){const n=t.replace('>ระบบรับซื้อของเก่า ERP',SYS_NAME).replace('Mingkwan','ERP');if(n!==t)tt.textContent=n}}).observe(tt,{childList:true,characterData:true,subtree:true});
 
  // ---------- หน้าตั้งค่า: โลโก้ร้าน ----------
  async function fromFile(f){
