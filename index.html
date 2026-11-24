@@ -3282,6 +3282,120 @@ async function autoColorAll(){if(!await dlg('ใส่สีตามหมว�
 })();
 </script>
 
+ <script>
+// ===== r36 add-on: กัน "เด้งออก" =====
+// 1) ถามยืนยันก่อนออกจากระบบ  2) เก็บบิลค้าง+แท็บล่าสุด กู้คืนหลังหน้าโหลดใหม่
+// 3) จำโปรไฟล์ไว้ใช้ตอนฐานช้า/เน็ตหลุด  4) แจ้งเตือนเมื่อ session ถูกยกเลิก  5) ปิดกล้องตอนสลับแอป  6) บันทึกเหตุการณ์
+(function(){
+ if(window.__mk36)return;window.__mk36=1;
+ const hasMe=()=>typeof ME!=='undefined'&&!!ME;
+
+ // ---------- 0) บันทึกเหตุการณ์ (แตะชื่อผู้ใช้ 5 ครั้งเพื่อดู) ----------
+ const LK='mk_evlog',stamp=()=>new Date().toLocaleString('th-TH',{dateStyle:'short',timeStyle:'medium'});
+ function log(t){try{const a=JSON.parse(localStorage.getItem(LK)||'[]');a.push(stamp()+'  '+t);while(a.length>60)a.shift();localStorage.setItem(LK,JSON.stringify(a))}catch(e){}}
+ try{const nv=performance.getEntriesByType('navigation')[0];log('โหลดหน้า: '+(nv?nv.type:'?')+(document.wasDiscarded?' · เบราว์เซอร์ปิดแท็บเองเพราะแรมไม่พอ':''))}catch(e){}
+ function showLog(){const a=JSON.parse(localStorage.getItem(LK)||'[]');
+  dlg('บันทึกเหตุการณ์ของเครื่องนี้',{body:'<pre style="text-align:left;white-space:pre-wrap;font-size:12px;max-height:50vh;overflow:auto;background:var(--bg);padding:8px;border-radius:8px;margin:8px 0">'+esc(a.join('\n')||'(ว่าง)')+'</pre>',ok:'📋 คัดลอก',no:'ปิด'})
+   .then(ok=>{if(ok)navigator.clipboard?.writeText(a.join('\n')).then(()=>toast('คัดลอกแล้ว ส่งให้ผู้พัฒนาได้เลย'))})}
+ let tap=0,tt=0;
+ document.addEventListener('click',e=>{if(!(e.target.closest&&e.target.closest('#who')))return;const n=Date.now();tap=(n-tt<2500)?tap+1:1;tt=n;if(tap>=5){tap=0;showLog()}});
+
+ // ---------- 1) จำโปรไฟล์ไว้ใช้ตอนโหลดโปรไฟล์ไม่ผ่าน (ฐานช้า/เน็ตหลุด) ไม่เด้งไปหน้าล็อกอิน ----------
+ const F2=window.fetch.bind(window),OBJ='application/vnd.pgrst.object+json; charset=utf-8';
+ window.fetch=async function(input,init){
+  let u;try{u=new URL(typeof input==='string'?input:(input&&input.url)||String(input),location.href)}catch(e){return F2(input,init)}
+  const id=u.searchParams.get('id')||'',
+   isMe=/\/rest\/v1\/profiles$/.test(u.pathname)&&u.searchParams.get('select')==='*'&&/^eq\./.test(id)&&((init&&init.method)||'GET').toUpperCase()==='GET';
+  if(!isMe)return F2(input,init);
+  const k='mk_me_'+id.slice(3),fb=why=>{let c=null;try{c=localStorage.getItem(k)}catch(e){}
+   if(!c)return null;log('โหลดโปรไฟล์ไม่ผ่าน ('+why+') ใช้ค่าที่จำไว้');return new Response(c,{status:200,headers:{'content-type':OBJ}})};
+  try{
+   const r=await F2(input,init);
+   if(r.status===200){try{localStorage.setItem(k,await r.clone().text())}catch(e){}return r}
+   if(r.status>=500||r.status===408)return fb(r.status)||r;
+   return r;
+  }catch(e){const f=fb(e&&e.message||'error');if(f)return f;throw e}
+ };
+
+ // ---------- 2) เก็บบิลที่ชั่งค้าง (ร่าง) ลงเครื่อง + กู้คืนหลังหน้าโหลดใหม่ ----------
+ let ready=false,tmr=null,lastSaveAt=0;
+ const dkey=()=>'draft:'+ME.id;
+ function snap(){if(!hasMe())return null;const L=cur.lines||[],seller=($('seller')||{}).value||'';
+  if(!L.length&&!seller.trim()&&!cur.plate)return null;
+  return{uid:ME.id,ts:Date.now(),savingAt:lastSaveAt,seller,cur:{lines:L,plate:cur.plate||'',holdId:cur.holdId||null,label:cur.label||'',stashId:cur.stashId||null,origName:cur.origName||'',editId:cur.editId||null,editNo:cur.editNo||'',editNote:cur.editNote||'',editStatus:cur.editStatus||'',extraPh:cur.extraPh||[]}}}
+ async function persist(force){if(!hasMe())return;const s=snap();if(!ready&&(!force||!s))return;try{await idbSet(dkey(),s)}catch(e){console.warn('[r36] draft',e)}}
+ const sched=()=>{if(!ready)return;clearTimeout(tmr);tmr=setTimeout(()=>persist(),700)};
+ const rl0=window.rLines;window.rLines=function(){const r=rl0.apply(this,arguments);try{sched()}catch(e){}return r};
+ document.addEventListener('input',e=>{const i=e.target&&e.target.id;if(i==='seller'||i==='plate'||i==='tks'||i==='tkp')sched()},true);
+ addEventListener('pagehide',()=>persist());
+ const sv0=window.saveBill;window.saveBill=function(){try{if(cur.lines.length){lastSaveAt=Date.now();persist()}}catch(e){}return sv0.apply(this,arguments)};
+
+ async function restore(){
+  let got=0;
+  try{
+   const d=await idbGet(dkey());
+   if(d&&d.uid===ME.id&&Date.now()-d.ts<7*864e5&&!(cur.lines&&cur.lines.length)&&d.cur&&(d.cur.lines||[]).length){
+    const c=d.cur,ps=[...new Set(c.lines.flatMap(l=>l.kind=='truck'?[l.ph,l.pl,...(l.phx||[]),...(l.plx||[])]:(l.photos||[])).concat((c.extraPh||[]).map(x=>x.path)).filter(x=>x&&!String(x).startsWith('data:')&&!PHU[x]))];
+    if(ps.length){try{((await sb.storage.from('bill-photos').createSignedUrls(ps,3600)).data||[]).forEach(x=>{if(x.signedUrl)PHU[x.path]=x.signedUrl})}catch(e){}}
+    cur={lines:c.lines,photos:[],plate:c.plate,holdId:c.holdId,label:c.label,stashId:c.stashId,origName:c.origName};
+    if(c.editId)Object.assign(cur,{editId:c.editId,editNo:c.editNo,editNote:c.editNote,editStatus:c.editStatus,extraPh:c.extraPh});
+    $('seller').value=d.seller||'';$('plate').value=cur.plate||'';
+    if($('truck').classList.contains('on'))rTruck();else rLines();
+    got=c.lines.length;log('กู้คืนบิลที่ค้าง '+got+' รายการ');
+    const rec=d.savingAt&&Date.now()-d.savingAt<10*60000;
+    toast('♻️ กู้คืนบิลที่ทำค้างไว้ '+got+' รายการ'+(rec?' — ⚠ ก่อนหน้านี้กำลังกดบันทึก ตรวจ "สถานะบิลของฉัน" ก่อนว่าบิลนี้ถูกบันทึกไปแล้วหรือยัง จะได้ไม่บันทึกซ้ำ':''),rec?15000:7000);
+   }
+  }catch(e){console.warn('[r36] restore',e)}
+  ready=true;return got}
+
+ // ---------- 3) จำแท็บล่าสุด + กู้คืน (ทำครั้งแรกตอน boot() คลิกแท็บแรก) ----------
+ let first=true,firstAt=0;
+ $('nav').addEventListener('click',async e=>{
+  const b=e.target.closest&&e.target.closest('button'),t=b&&b.dataset.t;if(!t||!hasMe()||!can(t))return;
+  const tk='mk_tab_'+ME.id;
+  if(first){first=false;firstAt=Date.now();
+   let saved=null;try{saved=localStorage.getItem(tk)}catch(_){}
+   const got=await restore();let go=saved;
+   if(got&&!['weigh','truck'].includes(saved)&&can('weigh'))go='weigh';
+   if(go&&go!==t&&can(go))setTimeout(()=>{const x=$('nav').querySelector('[data-t="'+go+'"]');if(x)x.click()},50);
+   else try{localStorage.setItem(tk,t)}catch(_){}
+   return}
+  if(!e.isTrusted&&Date.now()-firstAt<5000)return;
+  try{localStorage.setItem(tk,t)}catch(_){}
+ });
+
+ // ---------- 4) ถามยืนยันก่อนออกจากระบบ ----------
+ let loggingOut=false;const lo0=window.logout;
+ window.logout=async function(){
+  const n=(typeof cur!=='undefined'&&cur.lines)?cur.lines.length:0;
+  const ok=await dlg('ออกจากระบบ?',{ok:'ออกจากระบบ',no:'อยู่ต่อ',danger:true,
+   body:n?'<div class="m" style="margin:8px 0">⚠ มีบิลที่ยังไม่บันทึก '+n+' รายการ ระบบจะเก็บไว้ให้เปิดต่อเมื่อเข้าสู่ระบบด้วยบัญชีเดิม</div>':''});
+  if(!ok)return;
+  loggingOut=true;log('กดออกจากระบบ');try{await persist(true)}catch(e){}
+  return lo0.apply(this,arguments)};
+
+ // ---------- 5) session ถูกยกเลิกโดยไม่ได้กดออก: เก็บบิล + แจ้งผู้ใช้ ----------
+ let warned=false;
+ sb.auth.onAuthStateChange(ev=>{
+  log('auth: '+ev);
+  if(ev==='SIGNED_OUT'&&hasMe()&&!loggingOut&&!warned){warned=true;
+   setTimeout(async()=>{try{await persist(true)}catch(e){}
+    if(await dlg('⚠ หมดเวลาการเข้าสู่ระบบ',{ok:'เข้าสู่ระบบใหม่',no:'ปิด',body:'<div class="m" style="margin:8px 0">ระบบออกจากระบบโดยที่ไม่ได้กดออกเอง (เซสชันหมดอายุหรือถูกยกเลิก) บิลที่ทำค้างอยู่ถูกเก็บไว้แล้ว เข้าสู่ระบบใหม่ด้วยบัญชีเดิมเพื่อทำต่อ</div>'}))location.reload()},0)}
+ });
+
+ // ---------- 6) ปิดกล้องตอนสลับแอป (กันแรมเต็ม/โดนปิดแท็บ) แล้วเปิดใหม่ตอนกลับมา ----------
+ document.addEventListener('visibilitychange',async()=>{
+  if(document.hidden){
+   log('ซ่อนหน้า/สลับแอป');persist();
+   try{if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;const v=$('vid');if(v)v.srcObject=null}}catch(e){}
+  }else{
+   log('กลับมาหน้านี้');
+   try{if(hasMe()&&!stream&&document.querySelector('dialog[open] video')){await startCam();
+     document.querySelectorAll('dialog[open] video').forEach(v=>{v.srcObject=stream;v.play().catch(()=>{})})}}catch(e){}
+  }});
+})();
+</script>
+
 <script>  
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
