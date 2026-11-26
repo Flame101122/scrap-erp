@@ -3397,14 +3397,12 @@ async function autoColorAll(){if(!await dlg('ใส่สีตามหมว�
 </script>
 
 <script>
-// ===== r37 add-on (เดิมชื่อ r36 — เปลี่ยนชื่อกันชนกับ r36 "กันเด้งออก" ของระบบ): (1) เมนู "📤 ส่งออกข้อมูลราคา" อ่านอย่างเดียว  (2) เมนู "📹 กล้องวงจรปิด" หลายจอ เลือกกล้อง/จำนวนจอ/แคปภาพ =====
+// ===== r37 add-on: เมนู "📤 ส่งออกข้อมูลราคา" (อ่านอย่างเดียว) — ส่วนกล้องย้ายไปอยู่ใน r38 =====
 // วางต่อท้ายบล็อกสุดท้าย (r35 ถ้าใส่แล้ว) และก่อน <script> ของ serviceWorker (ไม่แก้โค้ดเดิม; ลบก้อนนี้ทิ้ง = กลับเป็นเหมือนเดิม)
 // ไม่ต้อง Run SQL เพิ่ม · ส่วนส่งออกใช้ได้เฉพาะ .select() เท่านั้น (ไม่มีคำสั่งเขียน/ลบ)
 // (1) ส่งออก: สรุปราคารายวันต่อสินค้า (กก. / บาท / ราคาเฉลี่ย / ต่ำสุด / สูงสุด / จำนวนบิล) เป็น CSV, JSON หรือคัดลอกข้อความส่ง AI + รายการบิลละเอียด CSV
-// (2) กล้อง: เพิ่มกล้องได้ไม่จำกัด (เก็บในเครื่องนั้น ๆ) · ชนิด MJPEG / ภาพนิ่งรีเฟรช / HLS · เลือกจำนวนจอ 1-2-4-6-9 และเลือกกล้องแต่ละจอ · แคปทีละจอหรือทุกจอ
-// ข้อจำกัดของเบราว์เซอร์: เปิด rtsp:// ตรงไม่ได้ (ต้องผ่านตัวแปลง เช่น go2rtc / MediaMTX / NVR ที่ให้ลิงก์ http(s)) และหน้าเว็บ https เปิดกล้อง http ไม่ได้
 (function(){
- if(window.__mkCctvExport)return;window.__mkCctvExport=1;
+ if(window.__mkExportData)return;window.__mkExportData=1;
  const q=id=>document.getElementById(id);
  const E=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
  const Z=n=>String(n).padStart(2,'0'),YMD=d=>d.getFullYear()+'-'+Z(d.getMonth()+1)+'-'+Z(d.getDate()),
@@ -3486,179 +3484,6 @@ async function autoColorAll(){if(!await dlg('ใส่สีตามหมว�
    <div class="card m"><b>ต้องการให้ Telegram/ระบบอื่นดึงเองอัตโนมัติ?</b><br>ให้ Dev รันไฟล์ <b>r37_readonly_api.sql</b> (สร้าง view สรุปราคารายวัน + user ฐานข้อมูลที่อ่านได้เฉพาะ view นั้น) แล้วใช้ user นั้นเชื่อมต่อ — ไม่ต้องเปิดสิทธิ์ตารางหลัก</div>`;
   q('xpGo').onclick=xpLoad;if(XP.rows.length)xpShow()};
 
- // =====================================================================
- // (2) กล้องวงจรปิดหลายจอ
- // =====================================================================
- const CK='mk_cams',VK='mk_cam_view',LAYS=[1,2,4,6,9];
- let CAMS=lsGet(CK,[]),VIEW=lsGet(VK,{n:4,slots:[]}),MED=[],CAPS=[];
- if(!Array.isArray(CAMS))CAMS=[];if(!VIEW||!LAYS.includes(VIEW.n))VIEW={n:4,slots:[]};if(!Array.isArray(VIEW.slots))VIEW.slots=[];
- const saveCams=()=>lsSet(CK,CAMS),saveView=()=>lsSet(VK,VIEW);
- const camById=id=>CAMS.find(c=>c.id==id);
- const uid=()=>'c'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
- const mask=u=>String(u||'').replace(/\/\/[^/@]+@/,'//***@');
- const detect=u=>/\.m3u8(\?|$)/i.test(u)?'hls':/mjpe?g|video\.cgi|\.mjpg|stream\.mjpeg|action=stream/i.test(u)?'mjpeg':'snap';
- const BLANK='data:image/gif;base64,R0lGODlhAQABAAAAACw=';
- const FIT='width:100%;height:100%;object-fit:contain;display:block;background:#000';
- let hlsP=null;
- const loadHls=()=>window.Hls?Promise.resolve():hlsP||(hlsP=new Promise((ok,no)=>{const s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/hls.js@1.5.8/dist/hls.min.js';s.onload=ok;s.onerror=()=>{hlsP=null;no(new Error('โหลด hls.js ไม่ได้'))};document.head.appendChild(s)}));
-
- // ---- ตัวเล่นภาพของกล้อง 1 ตัว (คืน object ที่มี stop/capture) ----
- function mkMedia(cam,box,onState){
-  const M={stopped:false,noCap:false,timer:null,hls:null,el:null,cam};
-  const kind=cam.mode&&cam.mode!='auto'?cam.mode:detect(cam.url);
-  const st=(s,m)=>{if(M.stopped)return;if(s=='ok')M.has=true;else if(s=='err')M.has=false;if(onState)onState(s,m)};
-  const later=(fn,ms)=>{clearTimeout(M.timer);M.timer=setTimeout(()=>{if(!M.stopped)fn()},ms)};
-  box.innerHTML='';
-  if(kind=='mjpeg'){
-   const img=new Image();img.alt='';img.style.cssText=FIT;M.el=img;box.appendChild(img);
-   let noCors=false;
-   const open=()=>{if(M.stopped)return;if(noCors)img.removeAttribute('crossorigin');else img.crossOrigin='anonymous';img.src=cam.url};
-   img.onload=()=>st('ok');
-   img.onerror=()=>{if(M.stopped)return;
-    if(!noCors){noCors=true;M.noCap=true;open();return}
-    st('err','เชื่อมต่อกล้องไม่ได้');later(()=>{noCors=false;M.noCap=false;st('load');open()},6000)};
-   st('load');open();
-   M.stop=()=>{M.stopped=true;clearTimeout(M.timer);img.onload=img.onerror=null;img.src=BLANK}}
-  else if(kind=='snap'){
-   const cv=document.createElement('canvas');cv.width=640;cv.height=360;cv.style.cssText=FIT;M.el=cv;box.appendChild(cv);
-   const x=cv.getContext('2d'),ms=Math.max(1,+cam.sec||2)*1000;let cors=true,got=false;
-   const tick=()=>{if(M.stopped)return;const t=new Image();if(cors)t.crossOrigin='anonymous';
-    t.onload=()=>{if(M.stopped)return;cv.width=t.naturalWidth||640;cv.height=t.naturalHeight||360;x.drawImage(t,0,0);if(!got){got=true;st('ok')}later(tick,ms)};
-    t.onerror=()=>{if(M.stopped)return;
-     if(cors){cors=false;M.noCap=true;tick();return}
-     st('err','เชื่อมต่อกล้องไม่ได้');got=false;cors=true;M.noCap=false;later(tick,6000)};
-    t.src=cam.url+(cam.url.includes('?')?'&':'?')+'_t='+Date.now()};
-   st('load');tick();
-   M.stop=()=>{M.stopped=true;clearTimeout(M.timer)}}
-  else if(kind=='hls'){
-   const v=document.createElement('video');v.muted=true;v.autoplay=true;v.playsInline=true;v.setAttribute('playsinline','');v.style.cssText=FIT;M.el=v;box.appendChild(v);
-   let noCors=false;
-   const start=()=>{if(M.stopped)return;st('load');
-    if(noCors)v.removeAttribute('crossorigin');else v.crossOrigin='anonymous';
-    if(v.canPlayType('application/vnd.apple.mpegurl')&&!window.Hls){ // Safari/iOS เล่นเองได้
-     v.src=cam.url;v.play().catch(()=>{});
-     v.onerror=()=>{if(M.stopped)return;if(!noCors){noCors=true;M.noCap=true;start();return}st('err','เชื่อมต่อกล้องไม่ได้');later(()=>{noCors=false;M.noCap=false;start()},6000)};return}
-    loadHls().then(()=>{if(M.stopped)return;
-     if(!window.Hls||!Hls.isSupported()){st('err','เบราว์เซอร์นี้เล่น HLS ไม่ได้');return}
-     const h=new Hls({lowLatencyMode:true,liveSyncDurationCount:2,maxBufferLength:6});M.hls=h;h.loadSource(cam.url);h.attachMedia(v);
-     h.on(Hls.Events.ERROR,(e,d)=>{if(!d.fatal||M.stopped)return;try{h.destroy()}catch(_){}M.hls=null;
-      if(!noCors&&/manifest|network/i.test(d.type+d.details)){noCors=true;M.noCap=true}
-      st('err','หลุดการเชื่อมต่อ');later(start,6000)});
-     v.addEventListener('playing',()=>st('ok'),{once:true});v.play().catch(()=>{})
-    }).catch(e=>{st('err',e.message);later(start,8000)})};
-   start();
-   M.stop=()=>{M.stopped=true;clearTimeout(M.timer);try{M.hls&&M.hls.destroy()}catch(_){}M.hls=null;v.onerror=null;try{v.pause();v.removeAttribute('src');v.load()}catch(_){}}}
-  else{st('err','ชนิดกล้องไม่รู้จัก');M.stop=()=>{M.stopped=true}}
-  // แคปภาพ 1 เฟรม + ใส่ชื่อกล้อง/เวลาที่มุมล่าง
-  M.capture=()=>new Promise((ok,no)=>{
-   const s=M.el,w=s.videoWidth||s.naturalWidth||s.width,h=s.videoHeight||s.naturalHeight||s.height;
-   if(M.noCap)return no(new Error('กล้อง "'+cam.name+'" ไม่เปิด CORS จึงแคปไม่ได้ (ดูภาพสดได้อย่างเดียว) — ตั้ง Access-Control-Allow-Origin ที่ตัวกล้อง/ตัวแปลงสัญญาณ'));
-   if(!M.has||!w||!h)return no(new Error('กล้อง "'+cam.name+'" ยังไม่มีภาพ'));
-   const c=document.createElement('canvas');c.width=w;c.height=h;const g=c.getContext('2d');
-   try{g.drawImage(s,0,0,w,h);
-    const fs=Math.max(14,Math.round(h/32)),tx=cam.name+'  '+YMD(new Date())+' '+HMS(new Date());
-    g.font='bold '+fs+'px sans-serif';g.textBaseline='middle';const tw=g.measureText(tx).width;
-    g.fillStyle='rgba(0,0,0,.6)';g.fillRect(0,h-fs*1.8,tw+fs*1.2,fs*1.8);g.fillStyle='#fff';g.fillText(tx,fs*.6,h-fs*.9);
-    c.toBlob(b=>b?ok(b):no(new Error('แคปไม่สำเร็จ')),'image/jpeg',.92)}
-   catch(e){no(new Error('แคปไม่ได้ (ภาพจากกล้องไม่ผ่าน CORS): '+e.message))}});
-  return M}
-
- function stopAll(){MED.forEach(m=>{try{m&&m.stop&&m.stop()}catch(e){}});MED=[]}
-
- // ---- เก็บภาพที่แคป (อยู่ในหน้าจอ ยังไม่ดาวน์โหลดจนกว่าจะกด) ----
- function addCap(blob,cam){
-  const d=new Date(),name=(cam.name||'cam').replace(/[^\w฀-๿-]+/g,'_')+'_'+STAMP(d)+'.jpg';
-  CAPS.unshift({name,blob,url:URL.createObjectURL(blob)});
-  while(CAPS.length>24){const o=CAPS.pop();URL.revokeObjectURL(o.url)}
-  renderCaps()}
- function renderCaps(){const b=q('camCaps');if(!b)return;
-  if(!CAPS.length){b.innerHTML='';return}
-  b.innerHTML=`<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><b>📷 ภาพที่แคป (${CAPS.length})</b><span><button id="capAll">⬇ ดาวน์โหลดทั้งหมด</button> <button id="capClr">🗑 ล้าง</button></span></div>
-   <div style="display:flex;gap:8px;overflow:auto;margin-top:8px">${CAPS.map((c,i)=>`<div style="flex:0 0 150px"><img src="${c.url}" style="width:150px;height:84px;object-fit:cover;border-radius:6px;display:block"><div style="display:flex;gap:4px;margin-top:4px"><button data-d="${i}" style="flex:1">⬇</button><button data-x="${i}">✕</button></div></div>`).join('')}</div></div>`;
-  b.querySelectorAll('[data-d]').forEach(x=>x.onclick=()=>{const c=CAPS[+x.dataset.d];saveBlob(c.name,c.blob)});
-  b.querySelectorAll('[data-x]').forEach(x=>x.onclick=()=>{const c=CAPS.splice(+x.dataset.x,1)[0];URL.revokeObjectURL(c.url);renderCaps()});
-  q('capClr').onclick=()=>{CAPS.forEach(c=>URL.revokeObjectURL(c.url));CAPS=[];renderCaps()};
-  q('capAll').onclick=async()=>{for(const c of CAPS){saveBlob(c.name,c.blob);await new Promise(r=>setTimeout(r,350))}}}
- async function capTile(i){const m=MED[i];if(!m)return tst('จอนี้ยังไม่ได้เลือกกล้อง');
-  try{addCap(await m.capture(),m.cam);tst('แคปภาพแล้ว')}catch(e){tst(e.message)}}
- async function capAll(){let ok=0,err='';for(let i=0;i<MED.length;i++){const m=MED[i];if(!m)continue;try{addCap(await m.capture(),m.cam);ok++}catch(e){err=e.message}}
-  tst(ok?('แคปแล้ว '+ok+' จอ'+(err?' (บางจอแคปไม่ได้)':'')):(err||'ไม่มีจอที่เลือกกล้องไว้'))}
-
- // ---- หน้าจอหลักของเมนูกล้อง ----
- function fillSlots(){const n=VIEW.n;while(VIEW.slots.length<n){const used=new Set(VIEW.slots);const nx=CAMS.find(c=>!used.has(c.id));VIEW.slots.push(nx?nx.id:'')}
-  VIEW.slots=VIEW.slots.slice(0,n).map(id=>camById(id)?id:'')}
- window.rCam=function(){const el=q('cam');if(!el)return;stopAll();fillSlots();
-  el.innerHTML=`<div class="card" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-    <b style="font-size:18px">📹 กล้องวงจรปิด</b><span style="flex:1"></span>
-    <span class="m">จำนวนจอ</span>${LAYS.map(n=>`<button data-n="${n}" class="${n==VIEW.n?'pri':''}" style="min-width:42px">${n}</button>`).join('')}
-    <button id="camCapAll">📸 แคปทุกจอ</button><button id="camMg">⚙ จัดการกล้อง (${CAMS.length})</button></div>
-   <div id="camGrid" class="mkcg n${VIEW.n}"></div><div id="camCaps"></div>`;
-  el.querySelectorAll('[data-n]').forEach(b=>b.onclick=()=>{VIEW.n=+b.dataset.n;saveView();rCam()});
-  q('camCapAll').onclick=capAll;q('camMg').onclick=camManager;
-  const grid=q('camGrid');
-  if(!CAMS.length){grid.innerHTML='<div class="card m" style="grid-column:1/-1">ยังไม่มีกล้อง — กด "⚙ จัดการกล้อง" เพื่อเพิ่ม (ใส่ลิงก์ http/https ของกล้อง หรือของตัวแปลงสัญญาณ เช่น go2rtc)</div>';renderCaps();return}
-  for(let i=0;i<VIEW.n;i++){
-   const t=document.createElement('div');t.className='mkct';
-   t.innerHTML=`<div class="mkch"><select>${'<option value="">— ไม่แสดง —</option>'+CAMS.map(c=>`<option value="${c.id}" ${c.id==VIEW.slots[i]?'selected':''}>${E(c.name)}</option>`).join('')}</select><button class="k" title="แคป">📸</button><button class="z" title="ขยาย">⛶</button></div><div class="mkcb"></div><div class="mkcs"></div>`;
-   grid.appendChild(t);
-   const sel=t.querySelector('select'),box=t.querySelector('.mkcb'),ov=t.querySelector('.mkcs');
-   const run=()=>{if(MED[i]){try{MED[i].stop()}catch(e){}MED[i]=null}box.innerHTML='';ov.style.display='none';
-    const cam=camById(VIEW.slots[i]);if(!cam){ov.textContent='ยังไม่ได้เลือกกล้อง';ov.style.display='flex';return}
-    MED[i]=mkMedia(cam,box,(s,m)=>{ov.style.display=s=='ok'?'none':'flex';ov.textContent=s=='load'?'กำลังเชื่อมต่อ ...':'⚠ '+(m||'ผิดพลาด')})};
-   sel.onchange=()=>{VIEW.slots[i]=sel.value;saveView();run()};
-   t.querySelector('.k').onclick=()=>capTile(i);
-   t.querySelector('.z').onclick=()=>t.classList.toggle('big');
-   run()}
-  renderCaps()};
-
- // ---- ตัวจัดการกล้อง ----
- function camManager(){
-  const d=mkDlg('');
-  const draw=()=>{d.innerHTML=`<b style="font-size:18px">⚙ จัดการกล้อง</b>
-   <div class="m" style="margin:4px 0 8px">เก็บรายการกล้องไว้ในเครื่อง/เบราว์เซอร์นี้เท่านั้น (ถ้ามีรหัสผ่านใน URL จะเห็นเฉพาะเครื่องนี้) · ย้ายไปเครื่องอื่นใช้ปุ่ม ส่งออก/นำเข้า</div>
-   <div style="max-height:34vh;overflow:auto">${CAMS.length?CAMS.map(c=>`<div class="card" style="margin-bottom:6px;padding:8px"><b>${E(c.name)}</b> <span class="m">· ${E(c.mode=='auto'||!c.mode?'อัตโนมัติ→'+detect(c.url):c.mode)}</span><div class="m" style="word-break:break-all">${E(mask(c.url))}</div>
-     <div class="row" style="margin-top:4px"><button data-t="${c.id}">▶ ทดสอบ</button><button data-e="${c.id}">✏️ แก้</button><button data-x="${c.id}">🗑 ลบ</button></div></div>`).join(''):'<div class="m">ยังไม่มีกล้อง</div>'}</div>
-   <div class="card" style="margin-top:8px"><b id="cmT">➕ เพิ่มกล้อง</b>
-    <label>ชื่อกล้อง</label><input id="cmN" placeholder="เช่น หน้าโรงงาน">
-    <label>ลิงก์ (http/https)</label><input id="cmU" placeholder="http://192.168.1.50/mjpg/video.mjpg" autocomplete="off" autocapitalize="off" spellcheck="false">
-    <div class="g" style="grid-template-columns:1fr 1fr"><div><label>ชนิดภาพ</label><select id="cmM"><option value="auto">อัตโนมัติ (เดาจากลิงก์)</option><option value="mjpeg">MJPEG (วิดีโอสตรีม)</option><option value="snap">ภาพนิ่งรีเฟรช (snapshot .jpg)</option><option value="hls">HLS (.m3u8)</option></select></div>
-    <div><label>รีเฟรชทุก (วินาที, เฉพาะภาพนิ่ง)</label><input id="cmS" type="number" min="1" max="60" value="2"></div></div>
-    <div class="row" style="margin-top:8px"><button id="cmClr">ล้างฟอร์ม</button><button class="pri" id="cmSave" style="flex:2">💾 บันทึกกล้อง</button></div></div>
-   <div class="row" style="margin-top:8px;flex-wrap:wrap"><button id="cmExp">⬇ ส่งออกรายการ</button><button id="cmImp">⬆ นำเข้ารายการ</button><button class="c" style="margin-left:auto">ปิด</button></div>`;
-   let edit=null;
-   const F=id=>d.querySelector('#'+id);
-   const reset=()=>{edit=null;F('cmN').value='';F('cmU').value='';F('cmM').value='auto';F('cmS').value='2';F('cmT').textContent='➕ เพิ่มกล้อง'};
-   d.querySelector('.c').onclick=()=>{d.remove();if(q('cam')?.classList.contains('on'))rCam()};
-   d.oncancel=()=>{d.remove();if(q('cam')?.classList.contains('on'))rCam()};
-   F('cmClr').onclick=reset;
-   F('cmSave').onclick=()=>{
-    const name=F('cmN').value.trim(),url=F('cmU').value.trim(),mode=F('cmM').value,sec=Math.min(60,Math.max(1,+F('cmS').value||2));
-    if(!name)return tst('ใส่ชื่อกล้อง');
-    if(/^rtsp:/i.test(url))return tst('เบราว์เซอร์เปิด rtsp:// ตรง ๆ ไม่ได้ — ใช้ตัวแปลง (go2rtc/MediaMTX/NVR) แล้วใส่ลิงก์ http(s) ที่ได้แทน');
-    if(!/^https?:\/\//i.test(url))return tst('ลิงก์ต้องขึ้นต้นด้วย http:// หรือ https://');
-    if(location.protocol=='https:'&&/^http:/i.test(url))tst('หน้าเว็บนี้เป็น https — เบราว์เซอร์อาจบล็อกกล้อง http (ต้องใช้ https หรือเปิดระบบผ่าน http ในเครือข่ายเดียวกัน)');
-    if(edit){const c=camById(edit);if(c)Object.assign(c,{name,url,mode,sec})}else CAMS.push({id:uid(),name,url,mode,sec});
-    if(!saveCams())tst('บันทึกลงเครื่องไม่ได้ (เบราว์เซอร์ปิดการเก็บข้อมูล) — รายการจะหายเมื่อปิดหน้า');
-    draw()};
-   d.querySelectorAll('[data-e]').forEach(b=>b.onclick=()=>{const c=camById(b.dataset.e);if(!c)return;edit=c.id;F('cmN').value=c.name;F('cmU').value=c.url;F('cmM').value=c.mode||'auto';F('cmS').value=c.sec||2;F('cmT').textContent='✏️ แก้ไขกล้อง'});
-   d.querySelectorAll('[data-x]').forEach(b=>b.onclick=()=>{const c=camById(b.dataset.x);if(!c||!confirm('ลบกล้อง "'+c.name+'" ?'))return;CAMS=CAMS.filter(x=>x.id!=c.id);VIEW.slots=VIEW.slots.map(s=>s==c.id?'':s);saveCams();saveView();draw()});
-   d.querySelectorAll('[data-t]').forEach(b=>b.onclick=()=>{const c=camById(b.dataset.t);if(c)camTest(c)});
-   F('cmExp').onclick=()=>saveBlob('cameras_'+YMD(new Date())+'.json',new Blob([JSON.stringify(CAMS,null,1)],{type:'application/json'}));
-   F('cmImp').onclick=()=>{const i=document.createElement('input');i.type='file';i.accept='.json,application/json';
-    i.onchange=async()=>{try{const a=JSON.parse(await i.files[0].text());if(!Array.isArray(a))throw 0;
-     for(const c of a){if(c&&c.name&&/^https?:\/\//i.test(c.url||''))CAMS.push({id:uid(),name:String(c.name),url:String(c.url),mode:['auto','mjpeg','snap','hls'].includes(c.mode)?c.mode:'auto',sec:+c.sec||2})}
-     saveCams();draw()}catch(e){tst('ไฟล์ไม่ถูกต้อง')}};i.click()}};
-  draw()}
- function camTest(c){
-  const t=mkDlg(`<b>ทดสอบ: ${E(c.name)}</b><div class="mkct" style="margin-top:8px"><div class="mkcb"></div><div class="mkcs">กำลังเชื่อมต่อ ...</div></div><div class="row" style="margin-top:8px"><button class="c">ปิด</button></div>`);
-  const ov=t.querySelector('.mkcs'),m=mkMedia(c,t.querySelector('.mkcb'),(s,x)=>{ov.style.display=s=='ok'?'none':'flex';ov.textContent=s=='load'?'กำลังเชื่อมต่อ ...':'⚠ '+(x||'ผิดพลาด')});
-  const end=()=>{try{m.stop()}catch(e){}t.remove()};t.querySelector('.c').onclick=end;t.oncancel=end}
-
- // ---- หยุดสตรีมเมื่อออกจากเมนู/ซ่อนแท็บ เพื่อไม่กินเน็ตและตัวกล้อง ----
- const camSec=()=>q('cam');
- document.addEventListener('visibilitychange',()=>{const s=camSec();if(!s)return;if(document.hidden)stopAll();else if(s.classList.contains('on'))rCam()});
- function watchCam(){const s=camSec();if(!s)return;new MutationObserver(()=>{if(!s.classList.contains('on'))stopAll()}).observe(s,{attributes:true,attributeFilter:['class']})}
-
  // ---- ลงทะเบียนเมนู ----
  const nav=q('nav'),main=document.querySelector('main');
  function reg(key,label,roles,color,fn){
@@ -3669,19 +3494,204 @@ async function autoColorAll(){if(!await dlg('ใส่สีตามหมว�
   if(typeof ME!=='undefined'&&ME)document.querySelectorAll('nav button').forEach(b=>{if(!can(b.dataset.t))b.style.display='none'});
   nav.addEventListener('click',e=>{if(e.target.closest('button')?.dataset.t==key&&can(key))fn()})}
  reg('xp','📤 ส่งออกข้อมูลราคา',['cashier','admin'],'#eab308',()=>rXp());
- reg('cam','📹 กล้องวงจรปิด',['clerk','cashier','admin'],'#06b6d4',()=>rCam());
- watchCam();
- const css=document.createElement('style');
- css.textContent='nav button[data-t=xp]{--c1:#eab308}nav button[data-t=cam]{--c1:#06b6d4}'
-  +'.mkcg{display:grid;gap:8px;grid-template-columns:1fr}.mkcg.n2{grid-template-columns:1fr 1fr}.mkcg.n4{grid-template-columns:1fr 1fr}.mkcg.n6,.mkcg.n9{grid-template-columns:repeat(3,1fr)}'
-  +'@media(max-width:700px){.mkcg.n2{grid-template-columns:1fr}.mkcg.n6,.mkcg.n9{grid-template-columns:1fr 1fr}}'
-  +'.mkct{position:relative;background:#000;border:1px solid var(--b);border-radius:10px;overflow:hidden}'
-  +'.mkch{display:flex;gap:4px;padding:4px;background:var(--c)}.mkch select{flex:1;min-width:0;font-size:14px;padding:4px}.mkch button{padding:4px 10px}'
-  +'.mkcb{aspect-ratio:16/9;background:#000}.mkcs{position:absolute;left:0;right:0;bottom:0;top:34px;display:flex;align-items:center;justify-content:center;color:#fff;background:rgba(0,0,0,.55);text-align:center;padding:8px;font-size:14px}'
-  +'.mkct.big{position:fixed;inset:0;z-index:99999;border-radius:0;display:flex;flex-direction:column}.mkct.big .mkcb{flex:1;aspect-ratio:auto}';
- document.head.appendChild(css);
+ const css=document.createElement('style');css.textContent='nav button[data-t=xp]{--c1:#eab308}';document.head.appendChild(css);
 })();
 </script>
+
+ <script>
+// ===== r38 add-on: ใช้ "กล้องวงจรปิด (IP camera)" เป็นแหล่งภาพถ่ายในหน้าชั่ง/รับซื้อ, ชั่งรถ, สอนกล้อง ฯลฯ =====
+// วางต่อท้ายบล็อกสุดท้าย และก่อน <script> ของ serviceWorker (ไม่แก้โค้ดเดิม; ลบก้อนนี้ทิ้ง = กลับเป็นกล้องเครื่องเหมือนเดิม)
+// หลักการ: ทุกหน้าต่างที่มีภาพกล้อง จะมีแถบ "แหล่งภาพ" ให้เลือก 📱 กล้องเครื่องนี้ / 📹 กล้องวงจรปิด / ➕ เชื่อมกล้องใหม่
+//   เมื่อเลือกกล้องวงจรปิด ระบบแปลงภาพให้เป็นสตรีมแบบเดียวกับกล้องมือถือ (ตัวแปร stream เดิม) ทำให้ปุ่ม 📷 ถ่ายเพิ่ม / สอนกล้อง / รูปในบิล ทำงานเหมือนเดิมทุกอย่าง
+//   ถ้ากล้องวงจรปิดต่อไม่ติด ระบบสลับกลับไปกล้องเครื่องนี้ให้เองชั่วคราว (ไม่ทำให้ชั่งไม่ได้)
+// ปุ่ม "เชื่อมกล้อง" เป็นแบบตรวจอัตโนมัติ: วางลิงก์ → กดตรวจสอบ → ระบบเลือกชนิดภาพให้เอง และเช็กว่าถ่ายรูปเก็บได้หรือไม่
+// ข้อจำกัดของเบราว์เซอร์: เปิด rtsp:// ตรงไม่ได้ (ต้องผ่าน go2rtc/MediaMTX/NVR ที่ให้ลิงก์ http/https) · หน้าเว็บ https เปิดกล้อง http ไม่ได้ (ยกเว้น localhost)
+//   · ถ่ายรูปเก็บได้ต่อเมื่อกล้อง/ตัวแปลงเปิด CORS (Access-Control-Allow-Origin)
+(function(){
+ if(window.__mkCctvPhoto)return;window.__mkCctvPhoto=1;
+ const q=id=>document.getElementById(id);
+ const E=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+ const tst=(m,ms)=>{try{toast(m,ms)}catch(e){console.log(m)}};
+ const lsGet=(k,d)=>{try{const v=localStorage.getItem(k);return v?JSON.parse(v):d}catch(e){return d}};
+ const lsSet=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v));return true}catch(e){return false}};
+ const CK='mk_cams',SK='mk_cam_src';           // ใช้คีย์เดียวกับเมนูกล้องของ r37 (รายการกล้องใช้ร่วมกันได้)
+ const cams=()=>{const a=lsGet(CK,[]);return Array.isArray(a)?a:[]};
+ const saveCams=a=>lsSet(CK,a);
+ const camById=id=>cams().find(c=>c.id==id);
+ const getPref=()=>{try{return localStorage.getItem(SK)||''}catch(e){return ''}};
+ const setPref=v=>{try{localStorage.setItem(SK,v||'')}catch(e){}};
+ const uid=()=>'c'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+ const BLANK='data:image/gif;base64,R0lGODlhAQABAAAAACw=';
+ const KN={mjpeg:'วิดีโอสตรีม (MJPEG)',snap:'ภาพนิ่งรีเฟรช',hls:'วิดีโอ HLS'};
+ let FALL=false; // true = กล้องวงจรปิดมีปัญหา ใช้กล้องเครื่องนี้ชั่วคราวจนกว่าผู้ใช้เลือกใหม่
+ const sc0=window.startCam;
+
+ // ---------- ตัวอ่านภาพจากกล้อง (ไม่แสดงบนจอเอง) ----------
+ let hlsP=null;
+ const loadHls=()=>window.Hls?Promise.resolve():hlsP||(hlsP=new Promise((ok,no)=>{const s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/hls.js@1.5.8/dist/hls.min.js';s.onload=ok;s.onerror=()=>{hlsP=null;no(new Error('โหลด hls.js ไม่ได้'))};document.head.appendChild(s)}));
+ const holder=()=>{let h=q('mk38h');if(!h){h=document.createElement('div');h.id='mk38h';h.style.cssText='position:fixed;left:-9999px;top:0;width:2px;height:2px;overflow:hidden';document.body.appendChild(h)}return h};
+ const detectKinds=u=>/\.m3u8(\?|$)/i.test(u)?['hls']:/snap|\.jpe?g(\?|$)|image\.cgi|capture|current\.jpg|jpg\/image/i.test(u)?['snap','mjpeg']:['mjpeg','snap'];
+ function mkSrc(url,kind,sec){
+  const S={kind,stopped:false,has:false,noCap:false,el:null,timer:null,hls:null};
+  const later=(fn,ms)=>{clearTimeout(S.timer);S.timer=setTimeout(()=>{if(!S.stopped)fn()},ms)};
+  if(kind=='mjpeg'){
+   const img=new Image();S.el=img;let noCors=false;
+   const open=()=>{if(S.stopped)return;if(noCors)img.removeAttribute('crossorigin');else img.crossOrigin='anonymous';img.src=url};
+   img.onload=()=>{S.has=true};
+   img.onerror=()=>{if(S.stopped)return;S.has=false;if(!noCors){noCors=true;S.noCap=true;open();return}later(()=>{noCors=false;S.noCap=false;open()},5000)};
+   open();S.stop=()=>{S.stopped=true;clearTimeout(S.timer);img.onload=img.onerror=null;img.src=BLANK}}
+  else if(kind=='snap'){
+   const cv=document.createElement('canvas');cv.width=640;cv.height=360;S.el=cv;const x=cv.getContext('2d'),ms=Math.max(1,+sec||2)*1000;let cors=true;
+   const tick=()=>{if(S.stopped)return;const t=new Image();if(cors)t.crossOrigin='anonymous';
+    t.onload=()=>{if(S.stopped)return;cv.width=t.naturalWidth||640;cv.height=t.naturalHeight||360;x.drawImage(t,0,0);S.has=true;later(tick,ms)};
+    t.onerror=()=>{if(S.stopped)return;if(cors){cors=false;S.noCap=true;tick();return}S.has=false;cors=true;S.noCap=false;later(tick,5000)};
+    t.src=url+(url.includes('?')?'&':'?')+'_t='+Date.now()};
+   tick();S.stop=()=>{S.stopped=true;clearTimeout(S.timer)}}
+  else{ // hls
+   const v=document.createElement('video');v.muted=true;v.autoplay=true;v.playsInline=true;v.setAttribute('playsinline','');S.el=v;holder().appendChild(v);let noCors=false;
+   const start=()=>{if(S.stopped)return;if(noCors)v.removeAttribute('crossorigin');else v.crossOrigin='anonymous';
+    if(v.canPlayType('application/vnd.apple.mpegurl')&&!window.Hls){v.src=url;v.play().catch(()=>{});v.onplaying=()=>{S.has=true};
+     v.onerror=()=>{if(S.stopped)return;S.has=false;if(!noCors){noCors=true;S.noCap=true;start();return}later(()=>{noCors=false;S.noCap=false;start()},5000)};return}
+    loadHls().then(()=>{if(S.stopped)return;if(!window.Hls||!Hls.isSupported())return;
+     const h=new Hls({lowLatencyMode:true,liveSyncDurationCount:2,maxBufferLength:6});S.hls=h;h.loadSource(url);h.attachMedia(v);
+     h.on(Hls.Events.ERROR,(e,d)=>{if(!d.fatal||S.stopped)return;try{h.destroy()}catch(_){}S.hls=null;S.has=false;if(!noCors&&/manifest|network/i.test(d.type+d.details)){noCors=true;S.noCap=true}later(start,5000)});
+     v.onplaying=()=>{S.has=true};v.play().catch(()=>{})}).catch(()=>later(start,8000))};
+   start();S.stop=()=>{S.stopped=true;clearTimeout(S.timer);try{S.hls&&S.hls.destroy()}catch(_){}S.hls=null;v.onplaying=v.onerror=null;try{v.pause();v.removeAttribute('src');v.load()}catch(_){}v.remove()}}
+  return S}
+
+ // ---------- ฟีด: วาดภาพกล้องวงจรปิดลง canvas แล้วทำเป็น MediaStream (ใช้แทน stream ของกล้องเครื่อง) ----------
+ const FEED={src:null,cv:null,ctx:null,stream:null,timer:null,cam:null,ready:null,t:0};
+ function drawTick(){const s=FEED.src;if(!s||!s.has)return;const e=s.el,w=e.videoWidth||e.naturalWidth||e.width,h=e.videoHeight||e.naturalHeight||e.height;if(!w||!h)return;
+  const W=Math.min(1280,w),H=Math.round(h*W/w);if(FEED.cv.width!==W||FEED.cv.height!==H){FEED.cv.width=W;FEED.cv.height=H}
+  try{FEED.ctx.drawImage(e,0,0,W,H);FEED.t=Date.now()}catch(_){}}
+ function stopFeed(){clearInterval(FEED.timer);if(FEED.src){try{FEED.src.stop()}catch(_){}}FEED.src=null;FEED.ready=null;FEED.cam=null;FEED.t=0;
+  if(FEED.stream){try{FEED.stream.getTracks().forEach(t=>t.stop())}catch(_){}}FEED.stream=null}
+ function startFeed(cam){
+  if(FEED.ready&&FEED.cam&&FEED.cam.id==cam.id&&FEED.cam.url==cam.url)return FEED.ready;
+  stopFeed();FEED.cam=cam;FEED.cv=document.createElement('canvas');FEED.cv.width=640;FEED.cv.height=360;FEED.ctx=FEED.cv.getContext('2d');
+  const kind=cam.mode&&cam.mode!='auto'?cam.mode:detectKinds(cam.url)[0];
+  FEED.src=mkSrc(cam.url,kind,cam.sec);FEED.timer=setInterval(drawTick,120);
+  const me=FEED.src;
+  const p=new Promise((ok,no)=>{const t0=Date.now(),w=setInterval(()=>{
+   if(FEED.src!==me){clearInterval(w);return no(new Error('ยกเลิก'))}
+   if(FEED.t){clearInterval(w);ok()}else if(Date.now()-t0>9000){clearInterval(w);no(new Error('ต่อกล้องวงจรปิดไม่ได้'))}},150)});
+  p.catch(()=>{});FEED.ready=p;return p}
+ const feedStream=()=>{const live=FEED.stream&&FEED.stream.getTracks().some(t=>t.readyState=='live');if(!live)FEED.stream=FEED.cv.captureStream(10);return FEED.stream};
+ const ownsStream=()=>typeof stream!=='undefined'&&stream&&FEED.stream&&stream===FEED.stream;
+ const vids=()=>[...document.querySelectorAll('video')].filter(v=>v.isConnected&&!v.closest('#mk38h'));
+ function rebind(){if(typeof stream==='undefined'||!stream)return;vids().forEach(v=>{try{v.srcObject=stream;v.play().catch(()=>{})}catch(_){}})}
+
+ // ---------- ครอบ startCam เดิม: ถ้าเลือกกล้องวงจรปิดไว้ ใช้ฟีดแทน ไม่งั้นใช้ของเดิมทุกอย่าง ----------
+ window.startCam=async function(){
+  const id=getPref(),cam=id&&!FALL?camById(id):null;
+  if(cam){
+   try{tst('กำลังเชื่อมต่อกล้องวงจรปิด: '+cam.name,2500);await startFeed(cam);stream=feedStream();const v=q('vid');if(v){v.srcObject=stream;v.play().catch(()=>{})}return}
+   catch(e){await fallback('ต่อกล้องวงจรปิด "'+cam.name+'" ไม่ได้');return}}
+  return sc0.apply(this,arguments)};
+ async function fallback(msg){
+  if(FALL)return;FALL=true;const mine=ownsStream();stopFeed();if(mine)stream=null;
+  tst('⚠ '+msg+' — สลับไปใช้กล้องเครื่องนี้ชั่วคราว',6000);
+  try{await sc0()}catch(_){}rebind();refreshSel()}
+ let busy=false;
+ async function setSource(id){
+  if(busy)return;busy=true;
+  try{FALL=false;setPref(id);
+   if(ownsStream()||id){try{stream&&stream.getTracks().forEach(t=>t.stop())}catch(_){}stream=null}
+   if(!id)stopFeed();
+   await window.startCam();rebind()}
+  finally{busy=false;refreshSel()}}
+
+ // ---------- ปิดฟีดเมื่อไม่มีภาพที่ใช้งานอยู่ (ประหยัดเน็ต/แรม) + ตรวจกล้องหลุด ----------
+ let idle=0;
+ setInterval(()=>{
+  if(!FEED.src)return;
+  const used=vids().some(v=>v.offsetParent!==null&&v.srcObject&&v.srcObject===FEED.stream);
+  idle=used?0:idle+1;
+  if(idle>=3){idle=0;const mine=ownsStream();stopFeed();if(mine)stream=null;return}
+  if(FEED.t&&Date.now()-FEED.t>15000&&!FEED.src.has)fallback('กล้องวงจรปิดหลุดการเชื่อมต่อ')},4000);
+ document.addEventListener('visibilitychange',()=>{if(document.hidden&&FEED.src){const mine=ownsStream();stopFeed();if(mine)stream=null}});
+
+ // ---------- แถบเลือกแหล่งภาพ ----------
+ const barHtml='<div class="mk38bar" style="display:flex;gap:4px;margin:6px 0;align-items:center;text-align:left"><select class="mk38sel" aria-label="แหล่งภาพกล้อง" style="flex:1;min-width:0;font-size:14px;padding:5px"></select><button type="button" class="mk38cfg" title="ตั้งค่ากล้องวงจรปิด" style="padding:5px 10px;flex:none">⚙</button></div>';
+ function fillSel(sel){const cur=FALL?'':getPref(),a=cams();
+  sel.innerHTML='<option value="">📱 กล้องเครื่องนี้</option>'+a.map(c=>`<option value="${E(c.id)}">📹 ${E(c.name)}</option>`).join('')+'<option value="__new">➕ เชื่อมกล้องวงจรปิด...</option>';
+  sel.value=a.some(c=>c.id==cur)?cur:''}
+ function refreshSel(){document.querySelectorAll('.mk38sel').forEach(fillSel)}
+ function inject(root){(root.querySelectorAll?root.querySelectorAll('video'):[]).forEach(v=>{
+  if(v.dataset.mk38||v.closest('#mk38h')||!v.parentNode)return;v.dataset.mk38='1';
+  const w=document.createElement('div');w.innerHTML=barHtml;const b=w.firstChild;v.parentNode.insertBefore(b,v);fillSel(b.querySelector('select'))})}
+ document.addEventListener('change',e=>{const s=e.target;if(!s.classList||!s.classList.contains('mk38sel'))return;
+  if(s.value=='__new'){fillSel(s);wizard();return}
+  setSource(s.value)});
+ document.addEventListener('click',e=>{if(e.target.closest&&e.target.closest('.mk38cfg'))manager()});
+ new MutationObserver(ms=>{for(const m of ms)for(const n of m.addedNodes)if(n instanceof HTMLDialogElement)inject(n)}).observe(document.body,{childList:true});
+ inject(document);
+
+ const mkDlg=h=>{const d=document.createElement('dialog');d.style.cssText='max-width:520px;width:94%;border-radius:14px;background:var(--c);color:var(--t)';d.innerHTML=h;document.body.appendChild(d);d.showModal();return d};
+
+ // ---------- ตัวจัดการกล้อง (⚙) ----------
+ function manager(){
+  const d=mkDlg('');
+  const draw=()=>{const a=cams(),cur=FALL?'':getPref();
+   d.innerHTML=`<b style="font-size:18px">📹 กล้องวงจรปิด</b><div class="m" style="margin:4px 0 8px">เลือกว่าจะใช้ภาพจากกล้องไหนถ่ายรูปในบิล · รายการกล้องเก็บในเครื่อง/เบราว์เซอร์นี้</div>
+   <div class="card" style="padding:8px;margin-bottom:6px;display:flex;align-items:center;gap:6px"><b style="flex:1">📱 กล้องเครื่องนี้</b>${cur==''?'<span class="m">ใช้อยู่</span>':'<button data-u="">ใช้</button>'}</div>
+   ${a.map(c=>`<div class="card" style="padding:8px;margin-bottom:6px"><div style="display:flex;align-items:center;gap:6px"><b style="flex:1">📹 ${E(c.name)}</b>${c.id==cur?'<span class="m">ใช้อยู่</span>':`<button data-u="${E(c.id)}">ใช้</button>`}</div><div style="display:flex;gap:6px;margin-top:6px"><button data-e="${E(c.id)}" style="flex:1">✏️ แก้ไข/ตรวจใหม่</button><button data-x="${E(c.id)}">🗑 ลบ</button></div></div>`).join('')}
+   <div class="row" style="margin-top:8px"><button class="pri" id="mgNew" style="flex:2">➕ เชื่อมกล้องวงจรปิดใหม่</button><button class="c">ปิด</button></div>`;
+   d.querySelector('.c').onclick=()=>d.remove();
+   d.querySelector('#mgNew').onclick=()=>{d.remove();wizard()};
+   d.querySelectorAll('[data-u]').forEach(b=>b.onclick=async()=>{await setSource(b.dataset.u);draw()});
+   d.querySelectorAll('[data-e]').forEach(b=>b.onclick=()=>{d.remove();wizard(camById(b.dataset.e))});
+   d.querySelectorAll('[data-x]').forEach(b=>b.onclick=async()=>{const c=camById(b.dataset.x);if(!c||!confirm('ลบกล้อง "'+c.name+'" ?'))return;
+    saveCams(cams().filter(x=>x.id!=c.id));if(getPref()==c.id)await setSource('');else refreshSel();draw()})};
+  d.oncancel=()=>d.remove();draw()}
+
+ // ---------- ตัวช่วยเชื่อมกล้อง (ตรวจอัตโนมัติ) ----------
+ function wizard(edit){
+  const d=mkDlg(`<b style="font-size:18px">📹 ${edit?'แก้ไข/ตรวจกล้อง':'เชื่อมกล้องวงจรปิด'}</b>
+   <div class="m" style="margin:4px 0 8px">① วางลิงก์ภาพของกล้อง → ② กด "ตรวจสอบ" (ระบบเลือกชนิดภาพให้เอง) → ③ เห็นภาพแล้วกด "บันทึก"</div>
+   <label>ชื่อกล้อง</label><input id="wzN" placeholder="เช่น กล้องหน้าตาชั่ง">
+   <label>ลิงก์ภาพของกล้อง (http/https)</label><input id="wzU" placeholder="http://192.168.1.50/snapshot.jpg" autocomplete="off" autocapitalize="off" spellcheck="false">
+   <details class="m" style="margin:6px 0"><summary>ตัวอย่างลิงก์ / ทำไมใช้ rtsp:// ไม่ได้</summary>
+    <div style="margin-top:4px">• ภาพนิ่ง: <code>http://IP/snapshot.jpg</code><br>• วิดีโอ MJPEG: <code>http://IP/mjpg/video.mjpg</code><br>• go2rtc: <code>http://IP:1984/api/stream.mjpeg?src=ชื่อกล้อง</code><br>• HLS: <code>http://IP:8888/cam/index.m3u8</code><br>• <b>rtsp://</b> เบราว์เซอร์เปิดตรงไม่ได้ ต้องผ่านตัวแปลง (go2rtc / MediaMTX / NVR) ให้เป็นลิงก์ http ก่อน</div></details>
+   <button class="bt-blue" id="wzGo" style="width:100%">🔍 ตรวจสอบอัตโนมัติ</button>
+   <div id="wzMsg" class="m" style="margin-top:8px;min-height:20px"></div>
+   <canvas id="wzPv" width="640" height="360" style="width:100%;max-height:190px;background:#000;border-radius:8px;margin-top:6px;display:none;object-fit:contain"></canvas>
+   <div class="row" style="margin-top:10px"><button class="c">ยกเลิก</button><button class="pri" id="wzSave" style="flex:2" disabled>💾 บันทึกและใช้กล้องนี้</button></div>`);
+  const F=id=>d.querySelector('#'+id);let R=null,pv=null,running=false;
+  const msg=(t,c)=>{F('wzMsg').innerHTML=t;F('wzMsg').style.color=c||''};
+  const end=()=>{clearInterval(pv);if(R&&R.src)R.src.stop();d.remove()};
+  d.querySelector('.c').onclick=end;d.oncancel=end;
+  if(edit){F('wzN').value=edit.name;F('wzU').value=edit.url}else F('wzN').value='กล้อง '+(cams().length+1);
+  F('wzGo').onclick=async()=>{
+   if(running)return;let url=F('wzU').value.trim();
+   if(!url)return tst('วางลิงก์กล้องก่อน');
+   if(/^rtsp:/i.test(url))return msg('❌ <b>rtsp://</b> เปิดในเบราว์เซอร์ตรง ๆ ไม่ได้ — ให้ช่างใช้ go2rtc / MediaMTX / NVR แปลงเป็นลิงก์ <b>http://</b> ก่อน แล้วนำมาวางที่นี่','#dc2626');
+   if(!/^https?:\/\//i.test(url)){if(/^[\w.-]+(:\d+)?(\/|$)/.test(url)){url='http://'+url;F('wzU').value=url}else return msg('❌ ลิงก์ต้องขึ้นต้นด้วย http:// หรือ https://','#dc2626')}
+   const warn=[];
+   if(/\/\/[^/@]+@/.test(url))warn.push('ลิงก์มีรหัสผ่านฝังอยู่ — Chrome มักบล็อกรูปแบบนี้ แนะนำให้สร้างผู้ใช้ดูอย่างเดียวที่ไม่ต้องใส่รหัส หรือใช้ผ่านตัวแปลง (go2rtc)');
+   if(location.protocol=='https:'&&/^http:\/\//i.test(url)&&!/^http:\/\/(localhost|127\.0\.0\.1)/i.test(url))warn.push('ระบบนี้เปิดผ่าน https แต่กล้องเป็น http — เบราว์เซอร์จะบล็อก ต้องให้ตัวแปลงเป็น https หรือติดตั้ง go2rtc บนเครื่องนี้แล้วใช้ http://localhost:1984/...');
+   running=true;F('wzGo').disabled=true;F('wzSave').disabled=true;R=null;clearInterval(pv);F('wzPv').style.display='none';
+   const kinds=detectKinds(url);let found=null;
+   for(const k of kinds){msg('⏳ กำลังลองแบบ '+KN[k]+' ...');const s=mkSrc(url,k,2);
+    const ok=await new Promise(r=>{const t0=Date.now(),w=setInterval(()=>{if(s.has){clearInterval(w);r(true)}else if(Date.now()-t0>7000){clearInterval(w);r(false)}},150)});
+    if(ok){found={kind:k,src:s};break}s.stop()}
+   running=false;F('wzGo').disabled=false;
+   if(!found){msg('❌ <b>ต่อกล้องไม่ได้</b><br>ลองเช็ก: (1) เครื่องนี้อยู่เครือข่ายเดียวกับกล้องไหม (2) ลองเปิดลิงก์นี้ในแท็บใหม่ ถ้าเห็นภาพแปลว่าลิงก์ถูก (3) ระบบเป็น https แต่กล้องเป็น http หรือไม่ (4) กล้องบางรุ่นต้องใส่ชนิดภาพ/ชื่อ stream ให้ตรง'+(warn.length?'<br><br>⚠ '+warn.join('<br>⚠ '):''),'#dc2626');return}
+   let cap=true;try{const c=document.createElement('canvas');c.width=c.height=16;c.getContext('2d').drawImage(found.src.el,0,0,16,16);c.toDataURL()}catch(e){cap=false}
+   R=found;R.cap=cap;
+   const cv=F('wzPv'),x=cv.getContext('2d');cv.style.display='block';
+   pv=setInterval(()=>{const e=found.src.el,w=e.videoWidth||e.naturalWidth||e.width,h=e.videoHeight||e.naturalHeight||e.height;if(!w||!h)return;if(cv.width!==w||cv.height!==h){cv.width=w;cv.height=h}try{x.drawImage(e,0,0,w,h)}catch(_){}},200);
+   if(cap){msg('✅ <b>เชื่อมต่อได้และถ่ายรูปเก็บได้</b> · ชนิดภาพ: '+KN[found.kind]+' (ระบบเลือกให้อัตโนมัติ)<br>ถ้าเห็นภาพด้านล่างถูกกล้อง กด "บันทึก" ได้เลย'+(warn.length?'<br>⚠ '+warn.join('<br>⚠ '):''),'#16a34a');F('wzSave').disabled=false}
+   else msg('⚠ <b>ดูภาพได้ แต่ถ่ายรูปเก็บลงบิลไม่ได้</b> เพราะกล้อง/ตัวแปลงไม่อนุญาต (CORS)<br>ให้ช่างเปิด <code>Access-Control-Allow-Origin: *</code> ที่ตัวกล้องหรือตัวแปลง (go2rtc ตั้งได้ที่ <code>api: origin: "*"</code>) แล้วกดตรวจสอบใหม่','#b45309')};
+  F('wzSave').onclick=async()=>{if(!R||!R.cap)return;
+   const name=F('wzN').value.trim()||'กล้องวงจรปิด',url=F('wzU').value.trim(),a=cams();let c=edit&&a.find(x=>x.id==edit.id);
+   if(c)Object.assign(c,{name,url,mode:R.kind,sec:2});else{c={id:uid(),name,url,mode:R.kind,sec:2};a.push(c)}
+   if(!saveCams(a))tst('บันทึกลงเครื่องไม่ได้ (เบราว์เซอร์ปิดการเก็บข้อมูล)');
+   end();stopFeed();await setSource(c.id);tst('✅ ใช้กล้อง "'+name+'" แล้ว')}}
+})();
+</script>
+
+ 
 
 <script>  
 if ('serviceWorker' in navigator) {
