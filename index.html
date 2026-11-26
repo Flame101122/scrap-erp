@@ -3397,14 +3397,14 @@ async function autoColorAll(){if(!await dlg('ใส่สีตามหมว�
 </script>
 
 <script>
-// ===== r36 add-on: (1) เมนู "📤 ส่งออกข้อมูลราคา" อ่านอย่างเดียว  (2) เมนู "📹 กล้องวงจรปิด" หลายจอ เลือกกล้อง/จำนวนจอ/แคปภาพ =====
+// ===== r37 add-on (เดิมชื่อ r36 — เปลี่ยนชื่อกันชนกับ r36 "กันเด้งออก" ของระบบ): (1) เมนู "📤 ส่งออกข้อมูลราคา" อ่านอย่างเดียว  (2) เมนู "📹 กล้องวงจรปิด" หลายจอ เลือกกล้อง/จำนวนจอ/แคปภาพ =====
 // วางต่อท้ายบล็อกสุดท้าย (r35 ถ้าใส่แล้ว) และก่อน <script> ของ serviceWorker (ไม่แก้โค้ดเดิม; ลบก้อนนี้ทิ้ง = กลับเป็นเหมือนเดิม)
 // ไม่ต้อง Run SQL เพิ่ม · ส่วนส่งออกใช้ได้เฉพาะ .select() เท่านั้น (ไม่มีคำสั่งเขียน/ลบ)
 // (1) ส่งออก: สรุปราคารายวันต่อสินค้า (กก. / บาท / ราคาเฉลี่ย / ต่ำสุด / สูงสุด / จำนวนบิล) เป็น CSV, JSON หรือคัดลอกข้อความส่ง AI + รายการบิลละเอียด CSV
 // (2) กล้อง: เพิ่มกล้องได้ไม่จำกัด (เก็บในเครื่องนั้น ๆ) · ชนิด MJPEG / ภาพนิ่งรีเฟรช / HLS · เลือกจำนวนจอ 1-2-4-6-9 และเลือกกล้องแต่ละจอ · แคปทีละจอหรือทุกจอ
 // ข้อจำกัดของเบราว์เซอร์: เปิด rtsp:// ตรงไม่ได้ (ต้องผ่านตัวแปลง เช่น go2rtc / MediaMTX / NVR ที่ให้ลิงก์ http(s)) และหน้าเว็บ https เปิดกล้อง http ไม่ได้
 (function(){
- if(window.__mk36)return;window.__mk36=1;
+ if(window.__mkCctvExport)return;window.__mkCctvExport=1;
  const q=id=>document.getElementById(id);
  const E=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
  const Z=n=>String(n).padStart(2,'0'),YMD=d=>d.getFullYear()+'-'+Z(d.getMonth()+1)+'-'+Z(d.getDate()),
@@ -3483,7 +3483,7 @@ async function autoColorAll(){if(!await dlg('ใส่สีตามหมว�
     <select id="xpS"><option value="paid">จ่ายเงินแล้วเท่านั้น (แนะนำ)</option><option value="all">จ่ายแล้ว + รอจ่าย</option></select>
     <button class="pri" id="xpGo" style="margin-top:10px;width:100%">🔍 โหลดข้อมูล</button><div class="m" id="xpLog" style="margin-top:6px"></div></div>
    <div id="xpOut"></div>
-   <div class="card m"><b>ต้องการให้ Telegram/ระบบอื่นดึงเองอัตโนมัติ?</b><br>ให้ Dev รันไฟล์ <b>r36_readonly_api.sql</b> (สร้าง view สรุปราคารายวัน + user ฐานข้อมูลที่อ่านได้เฉพาะ view นั้น) แล้วใช้ user นั้นเชื่อมต่อ — ไม่ต้องเปิดสิทธิ์ตารางหลัก</div>`;
+   <div class="card m"><b>ต้องการให้ Telegram/ระบบอื่นดึงเองอัตโนมัติ?</b><br>ให้ Dev รันไฟล์ <b>r37_readonly_api.sql</b> (สร้าง view สรุปราคารายวัน + user ฐานข้อมูลที่อ่านได้เฉพาะ view นั้น) แล้วใช้ user นั้นเชื่อมต่อ — ไม่ต้องเปิดสิทธิ์ตารางหลัก</div>`;
   q('xpGo').onclick=xpLoad;if(XP.rows.length)xpShow()};
 
  // =====================================================================
